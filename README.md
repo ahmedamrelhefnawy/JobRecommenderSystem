@@ -1,6 +1,6 @@
 # Job Recommender System
 
-This project is a Job Recommender System that matches user profiles with job descriptions using advanced natural language processing (NLP) and collaborative filtering techniques.
+This project is a Job Recommender System that matches user profiles with job descriptions using advanced natural language processing (NLP) techniques.
 
 ## Features
 
