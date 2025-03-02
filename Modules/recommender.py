@@ -1,111 +1,117 @@
-import pickle
 import numpy as np
-from sentence_transformers import SentenceTransformer
-
-from .consts import workspace_dir
+from abc import ABC, abstractmethod
+from .model_handlers import model_loader, embed
 from . import utils
 
-models_dir = workspace_dir + '/Models'
 
-def load_encoder(path):
-    with open(path, 'rb') as f:
-        encoder = pickle.load(f)
-    return encoder
+loader = model_loader()
 
-def load_vectorizer(path):
-    with open(path, 'rb') as f:
-        vectorizer = pickle.load(f)
-    return vectorizer
-
-class content_based_job_recommender:
+class content_based_recommender(ABC):
     def __init__(self,
-                title_vectorizer = None,
-                content_vectorizer = None,
-                encoders= {
-                    'work_type': load_encoder(models_dir + '/Encoders/work_type_onehot_enc.pkl')
-                    }
+                vectorizers: dict= None,
+                encoders: dict   = None
                 ):
-        
-        if not title_vectorizer:
-            title_vectorizer = SentenceTransformer(models_dir + '/Vectorizers/MiniLM/')
-        self.title_vectorizer = title_vectorizer
-        
-        if not content_vectorizer:
-            content_vectorizer = load_vectorizer(models_dir + '/Vectorizers/tfidf.pkl')
-        self.content_vectorizer = content_vectorizer
-        
+        self.vectorizers = vectorizers
         self.encoders = encoders
         
-        self.user_job_map = {
-                                'about': 'description',
-                                'preferred_work_types':'work_type',
-                                'experience_level': 'formatted_experience_level',
-                                'Expected Salary': 'normalized_salary'
-                            }
+        # Handle missing vectorizers
+        if not self.vectorizers:
+            self.vectorizers = dict()
+            
+        # Handle missing encoders
+        if not self.encoders:
+            self.encoders = dict()
     
-    def get_matches_score(self, ind1, ind1_param, ind2, ind2_param):
-        encoder = self.encoders[ind1_param]
+    def _recommend(self, base: dict, options: list[dict], weights: dict):
+        similarity = dict()
+
+        for feature in base.keys():
+            
+            if feature in self.vectorizers: # Feature is vectorizable text
+                base_embd = embed(self.vectorizers[feature], [base[feature]])
+                options_embd = embed(self.vectorizers[feature], [option[feature] for option in options])
+                
+            elif feature in self.encoders: # Feature is categorical
+                base_embd = embed(self.encoders[feature], base[feature])
+                base_embd = np.sum(base_embd, axis= 0)
+                
+                options_embd = embed(self.encoders[feature], [[option[feature]] for option in options])
+                
+            else: # Feature not supported
+                continue
+            
+            # Add feature Similarity
+            similarity[feature] = np.dot(base_embd, options_embd.T).squeeze()
+        
+        # Accumulate Scores
+        n_options = len(options)
+        option_scores = np.zeros((n_options, ), dtype= np.float64)
+        
+        for feature, scores in similarity.items():
+            option_scores += weights[feature] * utils.normalize(scores)
+
+        sorted_options = sorted(enumerate(option_scores), key= lambda x: x[1], reverse= True)
+        return sorted_options
+    
+class job_recommender(content_based_recommender):
+    def __init__(self,
+                vectorizers: dict = None,
+                encoders: dict = None
+                ):
+        super().__init__()
+        
+        # Load Title Vectorizer
+        if not ('title' in self.vectorizers and self.vectorizers['title']):
+            self.vectorizers['title'] = loader.load_vectorizer('MiniLM', type= 'sentence_transformer')
+        
+        # Load Content Vectorizer
+        if not ('content' in self.vectorizers and self.vectorizers['content']):
+            self.vectorizers['content'] = loader.load_vectorizer('jobs_tfidf.pkl', type='sklearn')
+        
+        # Load Encoders
+        if not ('work_type' in self.encoders and self.encoders['work_type']):
+            self.encoders['work_type'] = loader.load_encoder('work_type_onehot_enc.pkl', type= 'sklearn')
+        
+        
+        # Check for intersection between vectorizers and encoders
+        intersect_keys = set(self.vectorizers.keys()).intersection(self.encoders.keys())
+        if intersect_keys:
+            raise ValueError(f"Can't Assign two models to the same feature\nConflict with features: {intersect_keys}")
+    
+    
+    def _get_matches_score(self, ind1, ind2, param):
+        encoder = self.encoders[param]
 
         n_categs = len(encoder.categories_)
 
         ind1_enc = np.zeros(shape= (1, n_categs), dtype= np.int32)
-        for option in ind1[ind1_param]:
-            ind1_enc = ind1_enc + encoder.transform([[option]]).toarray()
+        ind1_enc = np.sum(encoder.transform([[option] for option in ind1[param]]).toarray(), axis = 0, keepdims= True)
 
-        ind2_enc = encoder.transform([[ind[ind2_param]] for ind in ind2]).toarray()
+        ind2_enc = np.sum(encoder.transform([[ind[param]] for ind in ind2]).toarray(), axis = 0, keepdims= True)
 
         # Calculate similarity
-        scores = np.dot(ind1_enc, ind2_enc.T)[0]
+        scores = np.dot(ind1_enc, ind2_enc.T).squeeze()
         return scores
-
+    
     def job_recommend(self, base_job: dict, jobs: list[dict], weights: dict):
-        title_vectorizer = self.title_vectorizer
-        content_vectorizer = self.content_vectorizer
-
-        similarity = dict()
-        if weights['title']:
-            # Get Title Embeddings
-            base_job_title = title_vectorizer.encode([base_job['title']])
-            jobs_title  = title_vectorizer.encode([job['title'] for job in jobs])
-
-            # Calculate Title Similarity
-            similarity['title'] = np.dot(base_job_title, jobs_title.T)[0]
-
-        if weights['content']:
-            # Get Description (Content) Embeddings
-            base_job_content_embd = content_vectorizer.transform([base_job['description']]).toarray()
-            jobs_content_embd = content_vectorizer.transform([job['description'] for job in jobs]).toarray()
-
-            # Calculate Content Embeddings Similarity
-            similarity['content'] = np.dot(base_job_content_embd, jobs_content_embd.T)[0]
-
-        # Calculate Work Type Similarity
-        if 'work_type' in base_job.keys() and weights['work_type']:
-            similarity['work_type'] = self.get_matches_score(base_job, 'work_type', jobs, 'work_type')
-        else:
-            similarity['work_type'] = 0
-
-        # Get Skill Match
-        if 'skills' in jobs[0] and weights['skills']:
-            base_job_skill_embd = content_vectorizer.transform(base_job['skills']).toarray()
-            jobs_skill_embd = content_vectorizer.transform([job['skills'] for job in jobs]).toarray()
-
-            temp_similarity = np.dot(base_job_skill_embd, jobs_skill_embd.T)
-            similarity['skills'] = np.average(temp_similarity)
+        base_job['work_type'] = [[base_job['work_type']]]
         
-        # Accumulate Scores
-        n_jobs = len(jobs)
-        job_scores = np.zeros((n_jobs, ), dtype= np.float64)
-        
-        for feature, scores in similarity.items():
-            job_scores += weights[feature] * utils.normalize(scores)
-
-        job_scores = sorted(enumerate(job_scores), key= lambda x: x[1], reverse= True)
-        return job_scores
+        return self._recommend(base_job, jobs, weights)
+    
     
     def user_job_recommend(self, user: dict, jobs: list[dict], weights: dict):
+        # Rearrange the work types as a list of lists
+        user['preferred_work_types'] = [[work_type] for work_type in user['preferred_work_types']]
+        
+        # Map user keys to recommender keys
+        user_map = {
+                    'about': 'content',
+                    'preferred_work_types':'work_type',
+                    'Expected Salary': 'normalized_salary'
+                    }
+        
         # Map user keys to job keys
-        for key, value in self.user_job_map.items():
+        for key, value in user_map.items():
             utils.rename_key(user, key, value)
 
-        return self.job_recommend(user, jobs, weights)
+        return self._recommend(user, jobs, weights)
