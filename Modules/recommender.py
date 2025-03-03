@@ -58,7 +58,7 @@ class job_recommender(content_based_recommender):
                 vectorizers: dict = None,
                 encoders: dict = None
                 ):
-        super().__init__()
+        super().__init__(vectorizers, encoders)
         
         # Load Title Vectorizer
         if not ('title' in self.vectorizers and self.vectorizers['title']):
@@ -78,20 +78,6 @@ class job_recommender(content_based_recommender):
         if intersect_keys:
             raise ValueError(f"Can't Assign two models to the same feature\nConflict with features: {intersect_keys}")
     
-    
-    def _get_matches_score(self, ind1, ind2, param):
-        encoder = self.encoders[param]
-
-        n_categs = len(encoder.categories_)
-
-        ind1_enc = np.zeros(shape= (1, n_categs), dtype= np.int32)
-        ind1_enc = np.sum(encoder.transform([[option] for option in ind1[param]]).toarray(), axis = 0, keepdims= True)
-
-        ind2_enc = np.sum(encoder.transform([[ind[param]] for ind in ind2]).toarray(), axis = 0, keepdims= True)
-
-        # Calculate similarity
-        scores = np.dot(ind1_enc, ind2_enc.T).squeeze()
-        return scores
     
     def job_recommend(self, base_job: dict, jobs: list[dict], weights: dict):
         base_job['work_type'] = [[base_job['work_type']]]
