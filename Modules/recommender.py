@@ -71,11 +71,7 @@ class job_recommender(content_based_recommender):
                 encoders: dict = None,
                 preprocessor = None,
                 ):
-<<<<<<< Updated upstream
-        super().__init__(vectorizers, encoders)
-=======
         super().__init__(vectorizers, encoders, preprocessor)
->>>>>>> Stashed changes
         
         # Load Title Vectorizer
         if not ('title' in self.vectorizers and self.vectorizers['title']):
