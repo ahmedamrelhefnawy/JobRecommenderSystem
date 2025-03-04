@@ -1,6 +1,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
 from .model_handlers import model_loader, embed
+from .preprocessor import text_preprocessor
 from . import utils
 
 
@@ -9,11 +10,12 @@ loader = model_loader()
 class content_based_recommender(ABC):
     def __init__(self,
                 vectorizers: dict= None,
-                encoders: dict   = None
+                encoders: dict   = None,
+                preprocessor = None,
                 ):
         self.vectorizers = vectorizers
         self.encoders = encoders
-        
+        self.preprocessor = preprocessor
         # Handle missing vectorizers
         if not self.vectorizers:
             self.vectorizers = dict()
@@ -21,6 +23,9 @@ class content_based_recommender(ABC):
         # Handle missing encoders
         if not self.encoders:
             self.encoders = dict()
+        
+        if not self.preprocessor:
+            self.preprocessor = text_preprocessor()
     
     def _recommend(self, base: dict, options: list[dict], weights: dict):
         similarity = dict()
@@ -28,6 +33,13 @@ class content_based_recommender(ABC):
         for feature in base.keys():
             
             if feature in self.vectorizers: # Feature is vectorizable text
+                # Preprocess text
+                base[feature] = self.preprocessor.clean(base[feature])
+                
+                for option in options:
+                    option[feature] = self.preprocessor.clean(option[feature])
+                
+                # Generate embeddings
                 base_embd = embed(self.vectorizers[feature], [base[feature]])
                 options_embd = embed(self.vectorizers[feature], [option[feature] for option in options])
                 
@@ -56,9 +68,14 @@ class content_based_recommender(ABC):
 class job_recommender(content_based_recommender):
     def __init__(self,
                 vectorizers: dict = None,
-                encoders: dict = None
+                encoders: dict = None,
+                preprocessor = None,
                 ):
+<<<<<<< Updated upstream
         super().__init__(vectorizers, encoders)
+=======
+        super().__init__(vectorizers, encoders, preprocessor)
+>>>>>>> Stashed changes
         
         # Load Title Vectorizer
         if not ('title' in self.vectorizers and self.vectorizers['title']):
