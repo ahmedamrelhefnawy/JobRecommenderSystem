@@ -6,12 +6,10 @@ This project is a Job Recommender System that matches user profiles with job des
 
 - Content-based job recommendation
 - Uses lightweight models for text representation and similarity calculation
-- Uses lightweight models for text representation and similarity calculation
 - Utilizes Sentence Transformers for title vectorization
 - Uses TF-IDF for content vectorization
 - Supports multiple features including title, content, work type, and skills
 - Parallel processing for efficient candidate ranking
-- RESTful API for easy integration
 - RESTful API for easy integration
 
 ## Installation
