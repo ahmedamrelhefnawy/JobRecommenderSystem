@@ -1,55 +1,168 @@
-from fastapi import FastAPI, Body
+from Modules.recommender import job_recommender
+from Modules.preprocessor import job_embedder, user_embedder
+from Modules.database import EmbeddingDB
+from Modules.utils import filter_recommendations
+from fastapi import FastAPI, Body, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from Models.models import user, job, weights
+from typing import List, Optional
+import gc
 
 app = FastAPI()
 
+# Initialize database
+print("Loading the database...")
+db = EmbeddingDB()
+print("Database loaded successfully")
+
+# Initialize embedders
+print("Loading the embedders...")
+job_embed = job_embedder()
+user_embed = user_embedder()
+print("Embedders loaded successfully")
+
+# Initialize recommender
 print("Loading the recommender...")
-from Modules.recommender import job_recommender
-cb_recommender = job_recommender()
+recommender = job_recommender(db)
 print("Recommender loaded successfully")
 
-class user(BaseModel    ):
-    title: str
-    about: str
-    preferred_work_types: list[str] | None
-    experience_level: str | None
-    expected_salary: int | None
-    skills: list[str] | None
+@app.middleware("http")
+async def cleanup_after_request(request: Request, call_next):
+    response = await call_next(request)
+    gc.collect()
+    return response
 
-class job(BaseModel):
-    title: str
-    content: str
-    work_type: str | None
+@app.post("/add_user/", description="Add a new user to the database")
+async def add_user(user_data: user = Body(..., title="User data", description="User data in JSON format")) -> JSONResponse:
+    try:
+        user_id = user_data.user_id
 
-class weights(BaseModel):
-    title: float = 0.2
-    content: float = 0.5
-    work_type: float = 0.1
-    skills: float = 0.2
+        # Generate embeddings for user data
+        user_embeddings = user_embed.embed(user_data)
+
+        # Store embeddings in database
+        db.store_user_embeddings(user_id, user_embeddings)
+
+        # Explicitly delete large objects
+        del user_embeddings
+
+        return JSONResponse(content={"message": "User created successfully", "user_id": user_id})
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/add_job/", description="Add a new job to the database")
+async def add_job(job_data: job = Body(..., title="Job data", description="Job data in JSON format")) -> JSONResponse:
+    try:
+        job_id = job_data.job_id
+
+        # Generate embeddings for job data
+        job_embeddings = job_embed.embed(job_data)
+
+        # Store embeddings in database
+        db.store_job_embeddings(job_id, job_embeddings)
+
+        # Explicitly delete large objects
+        del job_embeddings
+
+        return JSONResponse(content={"message": "Job created successfully", "job_id": job_id})
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/add_users_batch/", description="Add multiple users to the database")
+async def add_users_batch(users_data: List[user] = Body(..., title="Users data", description="List of users data in JSON format")) -> JSONResponse:
+    try:
+        user_ids = [user_data.user_id for user_data in users_data]
+
+        # Generate embeddings for all users
+        users_embeddings = user_embed.embed_batch(users_data)
+
+        # Store embeddings in database for each user
+        for user_id, user_embeddings in zip(user_ids, users_embeddings):
+            db.store_user_embeddings(user_id, user_embeddings)
+            del user_embeddings  # Delete individual embeddings after storing
+
+        # Explicitly delete large objects
+        del users_embeddings
+
+        return JSONResponse(content={
+            "message": "Users batch created successfully",
+            "user_ids": user_ids
+        })
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post("/add_jobs_batch/", description="Add multiple jobs to the database")
+async def add_jobs_batch(jobs_data: List[job] = Body(..., title="Jobs data", description="List of jobs data in JSON format")) -> JSONResponse:
+    try:
+        job_ids = [job_data.job_id for job_data in jobs_data]
+
+        # Generate embeddings for all jobs
+        jobs_embeddings = job_embed.embed_batch(jobs_data)
+
+        # Store embeddings in database for each job
+        for job_id, job_embeddings in zip(job_ids, jobs_embeddings):
+            db.store_job_embeddings(job_id, job_embeddings)
+            del job_embeddings  # Delete individual embeddings after storing
+
+        # Explicitly delete large objects
+        del jobs_embeddings
+
+        return JSONResponse(content={
+            "message": "Jobs batch created successfully",
+            "job_ids": job_ids
+        })
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
 
 @app.post("/recommend/user", description="Recommend jobs based on user information")
-async def user_based_recommend(user: user = Body(..., title="User data", description="User data in JSON format"),
-                                jobs: list[job] = Body(..., title="Jobs data", description="Jobs data in JSON format"),
-                                weights: weights = Body(weights(), title="Score Evaluation Weights")) -> JSONResponse:
-    
-    user = user.model_dump()
-    jobs = [job.model_dump() for job in jobs]
-    weights = weights.model_dump()
-    
-    recommendations = cb_recommender.user_job_recommend(user, jobs, weights)
-    
-    return JSONResponse(content= {'recommendations': recommendations})
+async def user_based_recommend(
+    user_id: int = Body(..., title="User ID", description="ID of the user to get recommendations for"),
+    jobs_ids: list[int] = Body(..., title="Jobs IDs", description="IDs of the jobs to get recommendations for"),
+    recommender_weights: weights = Body(weights(), title="Score Evaluation Weights"),
+    max_recommendations: int = Body(10, title="Maximum number of recommendations", description="Maximum number of recommendations to return"),
+    threshold: Optional[float] = Body(None, title="Threshold for recommendations", description="Minimum score for recommendations\nNote: if provided, max_recommendations will be ignored")
+) -> JSONResponse:
+    try:
+        # Get recommendations
+        recommendations = recommender.user_job_recommend(user_id, jobs_ids, recommender_weights)
+
+        # Filter recommendations
+        filtered_recommendations = filter_recommendations(recommendations, max_recommendations, threshold)
+
+        return JSONResponse(content={'recommendations': filtered_recommendations})
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
 
 @app.post("/recommend/job", description="Recommend jobs based on a job information")
-async def job_based_recommend(base_job: job = Body(..., title="Base Job data", description="Base Job data in JSON format"),
-                            jobs: list[job] = Body(..., title="Jobs data", description="Jobs data in JSON format"),
-                            weights: weights = Body(weights(), title="Score Evaluation Weights")) -> JSONResponse:
-    
-    base_job = base_job.model_dump()
-    jobs = [job.model_dump() for job in jobs]
-    weights = weights.model_dump()
-    
-    recommendations = cb_recommender.job_recommend(base_job, jobs, weights)
+async def job_based_recommend(
+    base_job_id: int = Body(..., title="Base Job ID", description="ID of the base job to get recommendations for"),
+    jobs_ids: list[int] = Body(..., title="Jobs IDs", description="IDs of the jobs to get recommendations for"),
+    recommender_weights: weights = Body(weights(), title="Score Evaluation Weights"),
+    max_recommendations: int = Body(10, title="Maximum number of recommendations", description="Maximum number of recommendations to return"),
+    threshold: Optional[float] = Body(None, title="Threshold for recommendations", description="Minimum score for recommendations\nNote: if provided, max_recommendations will be ignored")
+) -> JSONResponse:
+    try:
+        # Remove base job from jobs_ids if exists
+        if base_job_id in jobs_ids:
+            jobs_ids.remove(base_job_id)
 
-    return JSONResponse(content= {'recommendations': recommendations})
+        # Get recommendations
+        recommendations = recommender.job_recommend(base_job_id, jobs_ids, recommender_weights)
+        
+        # Filter recommendations
+        filtered_recommendations = filter_recommendations(recommendations, max_recommendations, threshold)
+
+        return JSONResponse(content={'recommendations': filtered_recommendations})
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
