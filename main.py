@@ -131,12 +131,32 @@ async def user_based_recommend(
     threshold: Optional[float] = Body(None, title="Threshold for recommendations", description="Minimum score for recommendations\nNote: if provided, max_recommendations will be ignored")
 ) -> JSONResponse:
     try:
+        # Check if user exists
+        missing_user_id = db.get_missing_user_ids([user_id])[0]
+        if missing_user_id:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "User not found",
+                         "missing_user_id": missing_user_id}
+            )
+        
+        # Get missing job ids
+        missing_job_ids = db.get_missing_job_ids(jobs_ids)
+        if missing_job_ids:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": "Jobs not found",
+                    "missing_job_ids": missing_job_ids
+                }
+            )
+        
         # Get recommendations
         recommendations = recommender.user_job_recommend(user_id, jobs_ids, recommender_weights)
 
         # Filter recommendations
         filtered_recommendations = filter_recommendations(recommendations, max_recommendations, threshold)
-
+        
         return JSONResponse(content={'recommendations': filtered_recommendations})
 
     except Exception as e:
@@ -152,9 +172,25 @@ async def job_based_recommend(
     threshold: Optional[float] = Body(None, title="Threshold for recommendations", description="Minimum score for recommendations\nNote: if provided, max_recommendations will be ignored")
 ) -> JSONResponse:
     try:
-        # Remove base job from jobs_ids if exists
-        if base_job_id in jobs_ids:
-            jobs_ids.remove(base_job_id)
+        # Check if base job exists
+        missing_base_job_id = db.get_missing_job_ids([base_job_id])[0]
+        if missing_base_job_id:
+            return JSONResponse(
+                status_code=404,
+                content={"error": "Base job not found",
+                         "missing_base_job_id": missing_base_job_id}
+            )
+
+        # Get missing job ids
+        missing_job_ids = db.get_missing_job_ids(jobs_ids)
+        if missing_job_ids:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": "Jobs not found",
+                    "missing_job_ids": missing_job_ids
+                }
+            )
 
         # Get recommendations
         recommendations = recommender.job_recommend(base_job_id, jobs_ids, recommender_weights)
