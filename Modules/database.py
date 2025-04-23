@@ -182,3 +182,65 @@ class EmbeddingDB:
         # Stack all embeddings into a single array
         embeddings = np.stack([results_dict[job_id][0,:] for job_id in job_ids], axis=0)
         return embeddings
+    
+    def get_missing_job_ids(self, job_ids: list[int]) -> list[int]:
+        """
+        Get list of job IDs that don't exist in the database.
+        
+        Args:
+            job_ids: List of job IDs to check
+            
+        Returns:
+            List of job IDs that are not found in the database
+        """
+        if not job_ids:
+            return []
+            
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Create placeholders for SQL IN clause
+            placeholders = ','.join('?' * len(job_ids))
+            
+            # Get existing job IDs
+            cursor.execute(f'''
+                SELECT job_id 
+                FROM jobs 
+                WHERE job_id IN ({placeholders})
+            ''', job_ids)
+            
+            existing_ids = {row[0] for row in cursor.fetchall()}
+            
+            # Return IDs that don't exist in database
+            return [job_id for job_id in job_ids if job_id not in existing_ids]
+    
+    def get_missing_user_ids(self, user_ids: list[int]) -> list[int]:
+        """
+        Get list of user IDs that don't exist in the database.
+        
+        Args:
+            user_ids: List of user IDs to check
+            
+        Returns:
+            List of user IDs that are not found in the database
+        """
+        if not user_ids:
+            return []
+            
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Create placeholders for SQL IN clause
+            placeholders = ','.join('?' * len(user_ids))
+            
+            # Get existing user IDs
+            cursor.execute(f'''
+                SELECT user_id 
+                FROM users 
+                WHERE user_id IN ({placeholders})
+            ''', user_ids)
+            
+            existing_ids = {row[0] for row in cursor.fetchall()}
+            
+            # Return IDs that don't exist in database
+            return [user_id for user_id in user_ids if user_id not in existing_ids]
