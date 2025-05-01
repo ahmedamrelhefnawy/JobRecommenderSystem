@@ -1,6 +1,3 @@
-from Modules.recommender import job_recommender
-from Modules.preprocessor import job_embedder, user_embedder
-from Modules.database import EmbeddingDB
 from Modules.utils import filter_recommendations
 from fastapi import FastAPI, Body, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -12,11 +9,14 @@ app = FastAPI()
 
 # Initialize database
 print("Loading the database...")
+from Modules.database import EmbeddingDB
 db = EmbeddingDB()
 print("Database loaded successfully")
 
 # Initialize embedders
 print("Loading the embedders...")
+from Modules.recommender import job_recommender
+from Modules.preprocessor import job_embedder, user_embedder
 job_embed = job_embedder()
 user_embed = user_embedder()
 print("Embedders loaded successfully")
