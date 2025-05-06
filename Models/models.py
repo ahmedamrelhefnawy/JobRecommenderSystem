@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class user(BaseModel):
@@ -16,9 +16,9 @@ class user(BaseModel):
         expected_salary (int | None): Expected annual salary in the local currency
         skills (list[str] | None): List of user's technical and professional skills
     """
-    user_id: int
-    title: str
-    about: str
+    user_id: int = Field(..., gt=0)
+    title: str = Field(..., min_length=1)
+    about: str = Field(..., min_length=1)
     preferred_work_types: list[str] | None
     experience_level: str | None
     expected_salary: int | None
@@ -36,10 +36,10 @@ class job(BaseModel):
         work_type (str | None): Type of work arrangement
             Valid values: ["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP", "REMOTE"]
     """
-    job_id: int
-    title: str
-    content: str
-    work_type: str | None
+    job_id: int = Field(..., gt=0)
+    title: str = Field(..., min_length=1)
+    content: str = Field(..., min_length=1)
+    work_type: str | None = Field(None, pattern="^(FULL_TIME|PART_TIME|CONTRACT|INTERNSHIP|REMOTE)$")
 
 
 class weights(BaseModel):

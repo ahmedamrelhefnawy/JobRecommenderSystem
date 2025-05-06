@@ -1,8 +1,12 @@
 import sqlite3
+import pymssql
 import numpy as np
 import os
 from io import BytesIO
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class EmbeddingDB:
@@ -244,3 +248,51 @@ class EmbeddingDB:
             
         # Return IDs that don't exist in database
         return [user_id for user_id in user_ids if user_id not in existing_ids]
+
+
+
+# Connect to MS SQL Server
+DB_SERVER= os.environ.get('DB_SERVER')
+DB_DATABASE = os.environ.get('DB_DATABASE')
+DB_USER_ID = os.environ.get('DB_USER_ID')
+DB_PASSWORD = os.environ.get('DB_PASSWORD')
+DB_PORT = os.environ.get('DB_PORT')
+
+
+def get_mssql_connection():
+    return pymssql.connect(server=DB_SERVER, port=DB_PORT, user=DB_USER_ID, password=DB_PASSWORD, database=DB_DATABASE)
+
+
+class ServerDB:
+    def __init__(self):
+        pass
+    
+    def get_unflagged_users(self):
+        """Fetch unflaged users from the database"""
+        
+        with get_mssql_connection() as conn, conn.cursor(as_dict= True) as cursor:
+            cursor.execute("SELECT Id, Title, About, JobTypePreference FROM AspNetUsers WHERE Flag = 0;")
+            users = cursor.fetchall()
+
+        return users
+    
+    def get_unflagged_jobs(self):
+        """Fetch unflaged jobs from the database"""
+        with get_mssql_connection() as conn, conn.cursor(as_dict= True) as cursor:
+            cursor.execute("SELECT JobId, JobTitle, Description, JobType FROM Jobs WHERE Flag = 0;")
+            jobs = cursor.fetchall()
+        
+        return jobs
+    
+    def flag_users(self, user_ids: list[int]):
+        """Flag users in the database"""
+        with get_mssql_connection() as conn, conn.cursor(as_dict= True) as cursor:
+            cursor.execute(f"UPDATE AspNetUsers SET Flag = 1 WHERE Id IN ({','.join(map(str, user_ids))});")
+            conn.commit()
+
+    
+    def flag_jobs(self, job_ids: list[int]):
+        """Flag jobs in the database"""
+        with get_mssql_connection() as conn, conn.cursor(as_dict= True) as cursor:
+            cursor.execute(f"UPDATE Jobs SET Flag = 1 WHERE JobId IN ({','.join(map(str, job_ids))});")
+            conn.commit()
