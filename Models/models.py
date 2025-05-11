@@ -54,7 +54,6 @@ class weights(BaseModel):
         
     Note: The sum of all weights should equal 1.0
     """
-    title: float = 0.2
+    title: float = 0.4
     content: float = 0.5
     work_type: float = 0.1
-    skills: float = 0.2
