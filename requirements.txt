@@ -37,3 +37,5 @@ tzdata==2025.1
 urllib3==2.3.0
 streamlit==1.45.0
 streamlit-tags==1.2.8
+pydantic                  2.10.6
+pydantic_core             2.27.2
