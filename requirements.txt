@@ -35,3 +35,5 @@ transformers==4.49.0
 typing_extensions==4.12.2
 tzdata==2025.1
 urllib3==2.3.0
+streamlit==1.45.0
+streamlit-tags==1.2.8
