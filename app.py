@@ -1,16 +1,18 @@
+import torch
+torch.classes.__path__ = []
 
 from Modules.recommender import job_recommender
 from Modules.preprocessor import user_embedder, job_embedder
 from Modules.utils import filter_recommendations
 from Models.models import user, job, weights
+from Modules import consts as cs
 from Modules.database import EmbeddingDB
 import pandas as pd
 import pickle
-import torch
+import os
 from tqdm import tqdm
 import streamlit as st
 
-torch.classes.__path__ = []
 
 
 if 'jobs' not in st.session_state:
@@ -50,7 +52,7 @@ recommender = st.session_state.recommender
 if st.session_state.jobs is None:
     with st.spinner("Loading jobs..."):
         print("Loading jobs ...")
-        jobs: pd.DataFrame = pickle.load(open('/media/ahmedelhefnawy/NewVolume/DEPI/Mega Project/Job Recommender System/test_data.pkl', 'rb'))
+        jobs: pd.DataFrame = pickle.load(open(os.path.join(cs.workspace_dir, 'jobs.pkl'), 'rb'))
         print("Jobs Loaded successfully")
 
         ids = [i for i in range(len(jobs))]
