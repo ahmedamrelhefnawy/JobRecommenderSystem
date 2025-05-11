@@ -106,13 +106,13 @@ class EmbeddingDB:
             ''', (job_id,))
 
             result = cursor.fetchone()
-            if result:
-                return {
-                    'title': self._blob_to_numpy(result[0]),
-                    'content': self._blob_to_numpy(result[1]),
-                    'work_type': self._blob_to_numpy(result[2])
-                }
-            return None
+        if result:
+            return {
+                'title': self._blob_to_numpy(result[0]),
+                'content': self._blob_to_numpy(result[1]),
+                'work_type': self._blob_to_numpy(result[2])
+            }
+        return None
     
     def get_user_embeddings(self, user_id: int) -> dict:
         """Retrieve user embeddings from the database"""
@@ -125,15 +125,15 @@ class EmbeddingDB:
             ''', (user_id,))
 
             result = cursor.fetchone()
-            if result:
-                return {
-                    'title': self._blob_to_numpy(result[0]),
-                    'about': self._blob_to_numpy(result[1]),
-                    'preferred_work_types': self._blob_to_numpy(result[2]),
-                    'experience_level': self._blob_to_numpy(result[3]),
-                    'skills': self._blob_to_numpy(result[4])
-                }
-            return None
+        if result:
+            return {
+                'title': self._blob_to_numpy(result[0]),
+                'about': self._blob_to_numpy(result[1]),
+                'preferred_work_types': self._blob_to_numpy(result[2]),
+                'experience_level': self._blob_to_numpy(result[3]),
+                'skills': self._blob_to_numpy(result[4])
+            }
+        return None
 
     def get_jobs_column_embeddings(self, job_ids: list[int], column_name: str) -> list[Optional[np.ndarray]]:
         """
@@ -208,11 +208,11 @@ class EmbeddingDB:
                 FROM jobs 
                 WHERE job_id IN ({placeholders})
             ''', job_ids)
-            
+
             existing_ids = {row[0] for row in cursor.fetchall()}
             
-            # Return IDs that don't exist in database
-            return [job_id for job_id in job_ids if job_id not in existing_ids]
+        # Return IDs that don't exist in database
+        return [job_id for job_id in job_ids if job_id not in existing_ids]
     
     def get_missing_user_ids(self, user_ids: list[int]) -> list[int]:
         """
@@ -242,5 +242,5 @@ class EmbeddingDB:
             
             existing_ids = {row[0] for row in cursor.fetchall()}
             
-            # Return IDs that don't exist in database
-            return [user_id for user_id in user_ids if user_id not in existing_ids]
+        # Return IDs that don't exist in database
+        return [user_id for user_id in user_ids if user_id not in existing_ids]
