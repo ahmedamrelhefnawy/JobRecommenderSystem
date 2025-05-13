@@ -174,7 +174,6 @@ with st.sidebar:
         st.markdown(f"**About:**")
         st.text(f"{usr.about}")
         st.markdown(f"**Preferred Work Types:** {', '.join(usr.preferred_work_types)}")
-        st.markdown("---")
     
     button_recommend = st.button("Recommend Jobs", use_container_width=True)
     
