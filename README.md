@@ -50,4 +50,4 @@ TfidfVectorizer(max_df=0.95, min_df=0.0001, stop_words='english')
 
 ## License
 
-This project is licensed under the [GNU GPLv3](LICENSE).
+This project is licensed under [License](LICENSE).
